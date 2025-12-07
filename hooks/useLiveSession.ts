@@ -106,8 +106,18 @@ export const useLiveSession = ({ onModeChange }: UseLiveSessionProps) => {
       setError(null);
       setMessages([]); // Clear old messages on new connection
 
-      const apiKey = process.env.API_KEY;
-      if (!apiKey) throw new Error("API Key is missing");
+      // Safety check for API Key environment variable
+      let apiKey = '';
+      try {
+        apiKey = process.env.API_KEY || '';
+      } catch (e) {
+        // process is likely not defined in this environment
+        console.error("process.env is not defined");
+      }
+
+      if (!apiKey) {
+        throw new Error("API Key is missing. Ensure process.env.API_KEY is set.");
+      }
 
       const ai = new GoogleGenAI({ apiKey });
       
@@ -347,7 +357,7 @@ export const useLiveSession = ({ onModeChange }: UseLiveSessionProps) => {
 
     } catch (e) {
       console.error(e);
-      setError("Failed to initialize session.");
+      setError("Failed to initialize session. API Key may be missing.");
       disconnect();
     }
   }, [onModeChange, disconnect, stopPlayback]);

@@ -24,7 +24,7 @@ export const Visualizer: React.FC<VisualizerProps> = ({ isActive, isSpeaking, vo
       animate();
     } else {
       setTick(0);
-      if (animationFrameId!) cancelAnimationFrame(animationFrameId);
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
     }
 
     return () => {
