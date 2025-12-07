@@ -56,9 +56,9 @@
                 </button>
             </div>
             
-            <p class="text-xs text-gray-400 mt-6 text-center">
-                Don't have a key? <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 hover:underline font-medium">Get one here</a>.
-                Your key is stored locally in your browser.
+            <p class="text-xs text-gray-400 mt-6 text-center text-gray-500">
+                Don't have a key? <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 hover:underline font-medium">Get one here</a>.<br>
+                <span class="text-amber-600">Note: The Live API may require a paid project.</span>
             </p>
         </div>
     </div>
@@ -69,11 +69,18 @@
             <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">F</div>
             <span class="text-2xl font-bold tracking-tight text-gray-800">FluentAI</span>
         </div>
-        <div id="mode-badge-container" class="opacity-0 transition-opacity duration-300">
-            <div id="mode-badge" class="flex items-center gap-2 px-3 py-1 rounded-full border shadow-sm">
-                <span id="mode-icon"></span>
-                <span id="mode-text" class="font-semibold tracking-wide uppercase text-xs hidden md:inline"></span>
+        <div class="flex items-center gap-2">
+            <!-- Mode Badge -->
+            <div id="mode-badge-container" class="opacity-0 transition-opacity duration-300">
+                <div id="mode-badge" class="flex items-center gap-2 px-3 py-1 rounded-full border shadow-sm">
+                    <span id="mode-icon"></span>
+                    <span id="mode-text" class="font-semibold tracking-wide uppercase text-xs hidden md:inline"></span>
+                </div>
             </div>
+            <!-- Reset Key Button -->
+            <button id="reset-key-btn" class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors" title="Change API Key">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+            </button>
         </div>
     </header>
 
@@ -123,6 +130,7 @@
             <div id="error-msg" class="hidden mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm flex items-center gap-2 max-w-md mx-auto animate-pulse">
                 <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"></circle><line x1="12" y1="8" x2="12" y2="12" stroke-width="2"></line><line x1="12" y1="16" x2="12.01" y2="16" stroke-width="2"></line></svg>
                 <span id="error-text"></span>
+                <button id="retry-key-btn" class="text-xs bg-white border border-red-300 px-2 py-1 rounded hover:bg-red-50 hidden">Change Key</button>
             </div>
         </div>
     </main>
@@ -136,7 +144,6 @@
         import { GoogleGenAI } from "@google/genai";
 
         // --- CONFIGURATION ---
-        // You can hardcode your key here if you want, otherwise the UI will prompt for it.
         const MANUAL_API_KEY = ''; 
         
         const MODEL_NAME = 'gemini-2.5-flash-native-audio-preview-09-2025';
@@ -194,6 +201,7 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
             chat: document.getElementById('chat-container'),
             error: document.getElementById('error-msg'),
             errorText: document.getElementById('error-text'),
+            retryKeyBtn: document.getElementById('retry-key-btn'),
             indicator: document.getElementById('speaking-indicator'),
             modeBadgeContainer: document.getElementById('mode-badge-container'),
             modeBadge: document.getElementById('mode-badge'),
@@ -202,7 +210,8 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
             // Modal Elements
             apiKeyModal: document.getElementById('api-key-modal'),
             apiKeyInput: document.getElementById('api-key-input'),
-            saveApiKeyBtn: document.getElementById('save-api-key-btn')
+            saveApiKeyBtn: document.getElementById('save-api-key-btn'),
+            resetKeyBtn: document.getElementById('reset-key-btn')
         };
 
         // --- ICONS (SVG Strings) ---
@@ -217,18 +226,18 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
 
         // --- API KEY HANDLING ---
         function getApiKey() {
-            // 1. Check hardcoded
             if (MANUAL_API_KEY) return MANUAL_API_KEY;
-            // 2. Check Environment
-            try {
-                if (process.env.API_KEY) return process.env.API_KEY;
-            } catch(e) {}
-            // 3. Check LocalStorage
+            try { if (process.env.API_KEY) return process.env.API_KEY; } catch(e) {}
             return localStorage.getItem('fluentai_api_key');
         }
 
         function promptForApiKey() {
             els.apiKeyModal.classList.remove('hidden');
+        }
+
+        function clearApiKey() {
+            localStorage.removeItem('fluentai_api_key');
+            promptForApiKey();
         }
 
         // --- VISUALIZER LOGIC ---
@@ -338,15 +347,19 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
                 
                 if (!apiKey) {
                     promptForApiKey();
-                    return; // Stop here, wait for user input
+                    return; 
                 }
 
                 const ai = new GoogleGenAI({ apiKey });
                 
-                // Init Audio
+                // Init Audio with resuming check
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 audioContextInput = new AudioContext({ sampleRate: 16000 });
                 audioContextOutput = new AudioContext({ sampleRate: 24000 });
+
+                // CRITICAL: Resume audio contexts on user interaction to prevent "interrupted" or silent failures
+                await audioContextInput.resume();
+                await audioContextOutput.resume();
 
                 mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
@@ -382,7 +395,9 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
                         },
                         onerror: (e) => {
                             console.error(e);
-                            setError("Connection error. Check console.");
+                            // Detect if error might be auth related
+                            setError("Connection Failed. API Key might be invalid or quota exceeded.");
+                            els.retryKeyBtn.classList.remove('hidden');
                             disconnect();
                         }
                     }
@@ -393,6 +408,7 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
             } catch (e) {
                 console.error(e);
                 setError(e.message || "Failed to connect");
+                els.retryKeyBtn.classList.remove('hidden');
                 disconnect();
             }
         }
@@ -404,7 +420,6 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
             state.volume = 0;
 
             if (session) {
-                // Try closing if possible, ignore errors
                 try { session.close(); } catch(e) {}
                 session = null;
             }
@@ -565,6 +580,7 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
                 els.error.classList.remove('hidden');
             } else {
                 els.error.classList.add('hidden');
+                els.retryKeyBtn.classList.add('hidden');
             }
         }
 
@@ -643,6 +659,9 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
                 connect(); // Try connecting again
             }
         });
+        
+        els.resetKeyBtn.addEventListener('click', clearApiKey);
+        els.retryKeyBtn.addEventListener('click', clearApiKey);
 
     </script>
 </body>
