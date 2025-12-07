@@ -35,6 +35,34 @@
          style="background-image: url('https://picsum.photos/1920/1080?grayscale&blur=2'); background-size: cover; background-position: center;">
     </div>
 
+    <!-- API Key Modal -->
+    <div id="api-key-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm hidden transition-opacity duration-300">
+        <div class="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl mx-4 transform transition-all scale-100">
+            <div class="flex flex-col items-center mb-6">
+                <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4 text-blue-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800 text-center">Enter Access Key</h2>
+                <p class="text-gray-500 text-center mt-2 text-sm">To use FluentAI, please provide your Google Gemini API Key.</p>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label for="api-key-input" class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                    <input type="password" id="api-key-input" placeholder="AIzaSy..." class="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-gray-50 focus:bg-white">
+                </div>
+                <button id="save-api-key-btn" class="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/30">
+                    Start Learning
+                </button>
+            </div>
+            
+            <p class="text-xs text-gray-400 mt-6 text-center">
+                Don't have a key? <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 hover:underline font-medium">Get one here</a>.
+                Your key is stored locally in your browser.
+            </p>
+        </div>
+    </div>
+
     <!-- Header -->
     <header class="relative z-10 w-full max-w-5xl mx-auto p-4 md:p-6 flex justify-between items-center bg-white/80 backdrop-blur-sm rounded-b-2xl shadow-sm mb-4">
         <div class="flex items-center gap-2">
@@ -108,9 +136,7 @@
         import { GoogleGenAI } from "@google/genai";
 
         // --- CONFIGURATION ---
-        // ⚠️ IMPORTANT: If you are running this on GitHub Pages or locally without a build server,
-        // you MUST paste your Gemini API Key inside the quotes below.
-        // Example: const MANUAL_API_KEY = 'AIzaSy...';
+        // You can hardcode your key here if you want, otherwise the UI will prompt for it.
         const MANUAL_API_KEY = ''; 
         
         const MODEL_NAME = 'gemini-2.5-flash-native-audio-preview-09-2025';
@@ -172,7 +198,11 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
             modeBadgeContainer: document.getElementById('mode-badge-container'),
             modeBadge: document.getElementById('mode-badge'),
             modeText: document.getElementById('mode-text'),
-            modeIcon: document.getElementById('mode-icon')
+            modeIcon: document.getElementById('mode-icon'),
+            // Modal Elements
+            apiKeyModal: document.getElementById('api-key-modal'),
+            apiKeyInput: document.getElementById('api-key-input'),
+            saveApiKeyBtn: document.getElementById('save-api-key-btn')
         };
 
         // --- ICONS (SVG Strings) ---
@@ -184,6 +214,22 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
             explanation: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>',
             default: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>'
         };
+
+        // --- API KEY HANDLING ---
+        function getApiKey() {
+            // 1. Check hardcoded
+            if (MANUAL_API_KEY) return MANUAL_API_KEY;
+            // 2. Check Environment
+            try {
+                if (process.env.API_KEY) return process.env.API_KEY;
+            } catch(e) {}
+            // 3. Check LocalStorage
+            return localStorage.getItem('fluentai_api_key');
+        }
+
+        function promptForApiKey() {
+            els.apiKeyModal.classList.remove('hidden');
+        }
 
         // --- VISUALIZER LOGIC ---
         let visualizerBars = [];
@@ -288,19 +334,11 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
             try {
                 setError(null);
                 
-                // API KEY CHECK
-                let apiKey = MANUAL_API_KEY;
-                // Try to get from process.env if available or replaced by build tool
-                // This try-catch ensures compatibility with both standard browsers and build environments
-                try {
-                    const envKey = process.env.API_KEY;
-                    if (envKey) apiKey = envKey;
-                } catch (e) {
-                    // process is undefined, ignore
-                }
+                const apiKey = getApiKey();
                 
                 if (!apiKey) {
-                    throw new Error("API Key is missing. Open index.html and set the MANUAL_API_KEY variable with your Gemini API Key.");
+                    promptForApiKey();
+                    return; // Stop here, wait for user input
                 }
 
                 const ai = new GoogleGenAI({ apiKey });
@@ -594,6 +632,16 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
         els.micBtn.addEventListener('click', () => {
             if (state.isConnected) disconnect();
             else connect();
+        });
+
+        // Modal Handlers
+        els.saveApiKeyBtn.addEventListener('click', () => {
+            const val = els.apiKeyInput.value.trim();
+            if (val) {
+                localStorage.setItem('fluentai_api_key', val);
+                els.apiKeyModal.classList.add('hidden');
+                connect(); // Try connecting again
+            }
         });
 
     </script>
