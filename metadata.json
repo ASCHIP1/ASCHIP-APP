@@ -1,0 +1,7 @@
+{
+  "name": " FluentAI Tutor",
+  "description": "An adaptive AI English tutor that helps you practice conversation via voice.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
