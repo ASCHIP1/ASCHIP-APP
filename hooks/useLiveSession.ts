@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality, Type, FunctionDeclaration } from '@google/genai';
 import { TeachingMode, ChatMessage } from '../types';
 import { FLUENT_AI_SYSTEM_INSTRUCTION, MODEL_NAME, VOICE_NAME } from '../constants';
@@ -6,9 +6,10 @@ import { base64ToBytes, bytesToBase64, decodeAudioData, float32ToInt16 } from '.
 
 interface UseLiveSessionProps {
   onModeChange: (mode: TeachingMode) => void;
+  apiKey: string | null;
 }
 
-export const useLiveSession = ({ onModeChange }: UseLiveSessionProps) => {
+export const useLiveSession = ({ onModeChange, apiKey }: UseLiveSessionProps) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false); // Model is speaking
   const [volume, setVolume] = useState(0);
@@ -106,17 +107,8 @@ export const useLiveSession = ({ onModeChange }: UseLiveSessionProps) => {
       setError(null);
       setMessages([]); // Clear old messages on new connection
 
-      // Safety check for API Key environment variable
-      let apiKey = '';
-      try {
-        apiKey = process.env.API_KEY || '';
-      } catch (e) {
-        // process is likely not defined in this environment
-        console.error("process.env is not defined");
-      }
-
       if (!apiKey) {
-        throw new Error("API Key is missing. Ensure process.env.API_KEY is set.");
+        throw new Error("API Key is missing.");
       }
 
       const ai = new GoogleGenAI({ apiKey });
@@ -125,6 +117,11 @@ export const useLiveSession = ({ onModeChange }: UseLiveSessionProps) => {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       inputContextRef.current = new AudioContext({ sampleRate: 16000 });
       outputContextRef.current = new AudioContext({ sampleRate: 24000 });
+
+      // CRITICAL: Resume audio contexts to prevent "interrupted" state or silent failures
+      // This is often required by browsers if the context was created before a user gesture.
+      await inputContextRef.current.resume();
+      await outputContextRef.current.resume();
 
       // Get Microphone Stream
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -308,7 +305,7 @@ export const useLiveSession = ({ onModeChange }: UseLiveSessionProps) => {
           },
           onerror: (err) => {
             console.error("Connection error", err);
-            setError("Connection failed. Please try again.");
+            setError("Connection failed. Check API Key or Billing.");
             disconnect();
           }
         }
@@ -355,12 +352,12 @@ export const useLiveSession = ({ onModeChange }: UseLiveSessionProps) => {
         processor.connect(inputContextRef.current.destination);
       }
 
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      setError("Failed to initialize session. API Key may be missing.");
+      setError(e.message || "Failed to initialize session.");
       disconnect();
     }
-  }, [onModeChange, disconnect, stopPlayback]);
+  }, [onModeChange, disconnect, stopPlayback, apiKey]);
 
   return {
     connect,
@@ -369,6 +366,7 @@ export const useLiveSession = ({ onModeChange }: UseLiveSessionProps) => {
     isSpeaking,
     volume,
     error,
+    setError,
     messages
   };
 };

@@ -1,2 +1,9 @@
-// The application has been converted to a single-file Vanilla JS application in index.html for portability.
-// This file is no longer used by the runtime but preserved to avoid build errors in some environments.
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);

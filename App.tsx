@@ -1,13 +1,86 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, BookOpen, MessageCircle, AlertCircle, Info } from 'lucide-react';
+import { Mic, MicOff, BookOpen, MessageCircle, AlertCircle, Info, Key, X } from 'lucide-react';
 import { useLiveSession } from './hooks/useLiveSession';
 import { Visualizer } from './components/Visualizer';
 import { TeachingMode } from './types';
 
+// Simple API Key Modal Component
+const ApiKeyModal = ({ 
+    isOpen, 
+    onSave, 
+    onClose 
+}: { 
+    isOpen: boolean; 
+    onSave: (key: string) => void;
+    onClose: () => void;
+}) => {
+    const [inputKey, setInputKey] = useState('');
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl mx-4 relative">
+                 {/* Close Button if we want to allow closing without saving (optional, but good UX if user wants to cancel) */}
+                 <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                    <X className="w-5 h-5" />
+                 </button>
+
+                <div className="flex flex-col items-center mb-6">
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4 text-blue-600">
+                        <Key className="w-6 h-6" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-800 text-center">Enter Access Key</h2>
+                    <p className="text-gray-500 text-center mt-2 text-sm">To use FluentAI, please provide your Google Gemini API Key.</p>
+                </div>
+                
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                        <input 
+                            type="password" 
+                            placeholder="AIzaSy..." 
+                            value={inputKey}
+                            onChange={(e) => setInputKey(e.target.value)}
+                            className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-gray-50 focus:bg-white"
+                        />
+                    </div>
+                    <button 
+                        onClick={() => onSave(inputKey)}
+                        className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/30"
+                    >
+                        Start Learning
+                    </button>
+                </div>
+                
+                <div className="text-xs text-center mt-6 space-y-1 text-gray-400">
+                   <p>Don't have a key? <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-medium">Get one here</a>.</p>
+                   <p className="text-amber-600">Live API requires a Paid Project (Billing Enabled).</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export default function App() {
   const [currentMode, setCurrentMode] = useState<TeachingMode>(TeachingMode.IDLE);
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
+  
   const chatContainerRef = useRef<HTMLDivElement>(null);
   
+  // Load Key on Mount
+  useEffect(() => {
+      const stored = localStorage.getItem('fluentai_api_key');
+      // If process.env.API_KEY is set (e.g. at build time or Vercel env), use it.
+      // Otherwise use localStorage.
+      if (typeof process !== 'undefined' && process.env.API_KEY) {
+          setApiKey(process.env.API_KEY);
+      } else if (stored) {
+          setApiKey(stored);
+      }
+  }, []);
+
   const { 
     connect, 
     disconnect, 
@@ -15,17 +88,39 @@ export default function App() {
     isSpeaking, 
     volume,
     error,
+    setError,
     messages
   } = useLiveSession({
-    onModeChange: (mode) => setCurrentMode(mode)
+    onModeChange: (mode) => setCurrentMode(mode),
+    apiKey: apiKey
   });
 
   const handleToggle = () => {
     if (isConnected) {
       disconnect();
     } else {
-      connect();
+      if (!apiKey) {
+        setIsKeyModalOpen(true);
+      } else {
+        connect();
+      }
     }
+  };
+
+  const saveApiKey = (key: string) => {
+      if (key.trim()) {
+          localStorage.setItem('fluentai_api_key', key.trim());
+          setApiKey(key.trim());
+          setIsKeyModalOpen(false);
+          // Optional: Auto-connect after saving
+          // connect(); 
+      }
+  };
+  
+  const clearApiKey = () => {
+      localStorage.removeItem('fluentai_api_key');
+      setApiKey(null);
+      setIsKeyModalOpen(true);
   };
 
   // Auto-scroll to bottom of chat
@@ -56,6 +151,12 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-900 relative overflow-hidden">
       
+      <ApiKeyModal 
+        isOpen={isKeyModalOpen} 
+        onSave={saveApiKey}
+        onClose={() => setIsKeyModalOpen(false)}
+      />
+
       {/* Background Image Overlay */}
       <div 
         className="absolute inset-0 z-0 opacity-10 pointer-events-none"
@@ -73,14 +174,25 @@ export default function App() {
           <span className="text-2xl font-bold tracking-tight text-gray-800">FluentAI</span>
         </div>
         
-        {/* Compact Mode Badge for Header */}
-        <div className={`transition-all duration-300 ${isConnected ? 'opacity-100' : 'opacity-0'}`}>
-           <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${getModeColor()} shadow-sm`}>
-             {getModeIcon()}
-             <span className="font-semibold tracking-wide uppercase text-xs hidden md:inline">
-               {currentMode}
-             </span>
-           </div>
+        <div className="flex items-center gap-2">
+            {/* Mode Badge */}
+            <div className={`transition-all duration-300 ${isConnected ? 'opacity-100' : 'opacity-0'}`}>
+            <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${getModeColor()} shadow-sm`}>
+                {getModeIcon()}
+                <span className="font-semibold tracking-wide uppercase text-xs hidden md:inline">
+                {currentMode}
+                </span>
+            </div>
+            </div>
+            
+            {/* Reset Key Button */}
+            <button 
+                onClick={clearApiKey} 
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                title="Change API Key"
+            >
+                <Key className="w-5 h-5" />
+            </button>
         </div>
       </header>
 
@@ -172,6 +284,12 @@ export default function App() {
                 <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm flex items-center gap-2 max-w-md mx-auto animate-pulse">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span className="font-medium">{error}</span>
+                    <button 
+                        onClick={() => { setIsKeyModalOpen(true); setError(null); }}
+                        className="ml-auto text-xs bg-white border border-red-300 px-2 py-1 rounded hover:bg-red-50"
+                    >
+                        Check Key
+                    </button>
                 </div>
               )}
         </div>
