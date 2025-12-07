@@ -14,17 +14,17 @@ export const Visualizer: React.FC<VisualizerProps> = ({ isActive, isSpeaking, vo
     let animationFrameId: number;
     
     const animate = () => {
-      if (isActive && isSpeaking) {
-        setTick((prev) => prev + 0.2);
-        animationFrameId = requestAnimationFrame(animate);
-      }
+      // Only increment if we are actively speaking
+      setTick((prev) => prev + 0.2);
+      animationFrameId = requestAnimationFrame(animate);
     };
 
     if (isActive && isSpeaking) {
       animate();
     } else {
       setTick(0);
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      // No need to cancel here; previous effect cleanup handled it, 
+      // or it was never started in this effect cycle.
     }
 
     return () => {
