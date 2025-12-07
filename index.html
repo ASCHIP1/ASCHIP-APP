@@ -35,6 +35,28 @@
          style="background-image: url('https://picsum.photos/1920/1080?grayscale&blur=2'); background-size: cover; background-position: center;">
     </div>
 
+    <!-- Protocol Warning Modal -->
+    <div id="protocol-modal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md hidden">
+        <div class="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl mx-4 text-center">
+            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4 mx-auto text-red-600">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">Local File Detected</h2>
+            <p class="text-gray-600 mb-6">
+                This app cannot run directly from a file (file://). Browsers block microphone and audio access for security.
+            </p>
+            <div class="bg-gray-50 p-4 rounded-xl text-left text-sm text-gray-700 mb-6 border border-gray-200">
+                <p class="font-bold mb-2">How to fix:</p>
+                <ol class="list-decimal list-inside space-y-1">
+                    <li>Install VS Code.</li>
+                    <li>Install the <strong>"Live Server"</strong> extension.</li>
+                    <li>Right-click <code>index.html</code> and select <strong>"Open with Live Server"</strong>.</li>
+                </ol>
+            </div>
+            <button onclick="window.location.reload()" class="text-blue-600 hover:underline">I understand, try anyway</button>
+        </div>
+    </div>
+
     <!-- API Key Modal -->
     <div id="api-key-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm hidden transition-opacity duration-300">
         <div class="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl mx-4 transform transition-all scale-100">
@@ -58,7 +80,7 @@
             
             <p class="text-xs text-gray-400 mt-6 text-center text-gray-500">
                 Don't have a key? <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 hover:underline font-medium">Get one here</a>.<br>
-                <span class="text-amber-600">Note: The Live API may require a paid project.</span>
+                <span class="text-amber-600 font-medium">Important: The Live API requires a Paid Project (Billing Enabled).</span>
             </p>
         </div>
     </div>
@@ -127,10 +149,17 @@
             </div>
 
             <!-- Error -->
-            <div id="error-msg" class="hidden mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm flex items-center gap-2 max-w-md mx-auto animate-pulse">
-                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"></circle><line x1="12" y1="8" x2="12" y2="12" stroke-width="2"></line><line x1="12" y1="16" x2="12.01" y2="16" stroke-width="2"></line></svg>
-                <span id="error-text"></span>
-                <button id="retry-key-btn" class="text-xs bg-white border border-red-300 px-2 py-1 rounded hover:bg-red-50 hidden">Change Key</button>
+            <div id="error-msg" class="hidden mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm flex flex-col md:flex-row items-center gap-2 max-w-md mx-auto animate-pulse text-center md:text-left">
+                <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"></circle><line x1="12" y1="8" x2="12" y2="12" stroke-width="2"></line><line x1="12" y1="16" x2="12.01" y2="16" stroke-width="2"></line></svg>
+                    <span id="error-text"></span>
+                </div>
+                <button id="retry-key-btn" class="text-xs bg-white border border-red-300 px-2 py-1 rounded hover:bg-red-50 hidden whitespace-nowrap mt-2 md:mt-0">Change Key</button>
+            </div>
+            
+            <!-- Interrupted Warning Toast -->
+            <div id="interrupted-msg" class="hidden mt-2 text-xs text-orange-600 bg-orange-50 px-3 py-1 rounded-full border border-orange-200">
+                Session interrupted by model (Check Usage/Billing)
             </div>
         </div>
     </main>
@@ -143,9 +172,15 @@
     <script type="module">
         import { GoogleGenAI } from "@google/genai";
 
+        // --- CHECK PROTOCOL ---
+        if (window.location.protocol === 'file:') {
+            document.getElementById('protocol-modal').classList.remove('hidden');
+        }
+
         // --- CONFIGURATION ---
         const MANUAL_API_KEY = ''; 
         
+        // Note: The Live API generally requires a paid project to avoid immediate "Interrupted" errors.
         const MODEL_NAME = 'gemini-2.5-flash-native-audio-preview-09-2025';
         const VOICE_NAME = 'Zephyr';
         const SYSTEM_INSTRUCTION = `
@@ -202,6 +237,7 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
             error: document.getElementById('error-msg'),
             errorText: document.getElementById('error-text'),
             retryKeyBtn: document.getElementById('retry-key-btn'),
+            interruptedMsg: document.getElementById('interrupted-msg'),
             indicator: document.getElementById('speaking-indicator'),
             modeBadgeContainer: document.getElementById('mode-badge-container'),
             modeBadge: document.getElementById('mode-badge'),
@@ -342,6 +378,7 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
         async function connect() {
             try {
                 setError(null);
+                els.interruptedMsg.classList.add('hidden');
                 
                 const apiKey = getApiKey();
                 
@@ -396,7 +433,7 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
                         onerror: (e) => {
                             console.error(e);
                             // Detect if error might be auth related
-                            setError("Connection Failed. API Key might be invalid or quota exceeded.");
+                            setError("Connection Failed. 1. Check Key. 2. Verify Google Cloud Billing is enabled for this project.");
                             els.retryKeyBtn.classList.remove('hidden');
                             disconnect();
                         }
@@ -498,10 +535,14 @@ You (Call tool setTeachingMode('Conversation Mode')): "Perfect! Where are you fr
             }
 
             if (message.serverContent?.interrupted) {
+                console.warn("Session Interrupted by Model");
                 scheduledSources.forEach(s => { try{s.stop()}catch(e){} });
                 scheduledSources.clear();
                 nextStartTime = 0;
                 setSpeaking(false);
+                els.interruptedMsg.classList.remove('hidden');
+                // Don't disconnect, just wait for user to speak again or model to recover,
+                // but usually interruption means the turn is over abruptly.
             }
 
             // Transcriptions
