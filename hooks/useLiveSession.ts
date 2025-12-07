@@ -106,14 +106,13 @@ export const useLiveSession = ({ onModeChange }: UseLiveSessionProps) => {
       setError(null);
       setMessages([]); // Clear old messages on new connection
 
-      // Safely access API Key without crashing in environments where 'process' is undefined
+      // Safety check for API Key environment variable
       let apiKey = '';
       try {
-        if (typeof process !== 'undefined' && process.env) {
-          apiKey = process.env.API_KEY || '';
-        }
+        apiKey = process.env.API_KEY || '';
       } catch (e) {
-        console.error("Error accessing process.env", e);
+        // process is likely not defined in this environment
+        console.error("process.env is not defined");
       }
 
       if (!apiKey) {
