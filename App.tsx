@@ -4,6 +4,9 @@ import { useLiveSession } from './hooks/useLiveSession';
 import { Visualizer } from './components/Visualizer';
 import { TeachingMode } from './types';
 
+// Hardcoded Default Key (as requested)
+const DEFAULT_API_KEY = 'AIzaSyDrXVpxzuQr6yoHa4zQ6yAWStyyOxvvI5g';
+
 // Simple API Key Modal Component
 const ApiKeyModal = ({ 
     isOpen, 
@@ -78,6 +81,9 @@ export default function App() {
           setApiKey(process.env.API_KEY);
       } else if (stored) {
           setApiKey(stored);
+      } else {
+          // Fallback to the hardcoded key if no other key is found
+          setApiKey(DEFAULT_API_KEY);
       }
   }, []);
 
